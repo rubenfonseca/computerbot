@@ -172,4 +172,3 @@ end # Computer
 
 Computer::Bot::Base.new # executes everything when this file is called by computerbot.rb. You will never create another Bot object :)
 
-EventMachine.run { }

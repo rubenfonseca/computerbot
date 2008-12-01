@@ -1,6 +1,6 @@
 module Computer #:nodoc:
   module Bot #:nodoc:
-    # This class represents a bot module
+    # Interface to be used for each bot module
     module Module
       # Every bot module must implement this method. Here, the module should
       # initialize his own structures, and keep the references to the Bot,
