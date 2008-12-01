@@ -12,11 +12,19 @@ require File.dirname(__FILE__) + '/jabber_bot.rb'
 
 Thread.abort_on_exception = true # helps debugging threads
 
-module Computer
-  module Bot
+module Computer #:nodoc:
+  module Bot #:nodoc:
+    # Computerbot interface. This class holds all the methods that can be
+    # used by the modules to interact with the clients.
     class Base
+      # The _persistence_ property holds a reference to the current persistence
+      # module being used on this configuration.
       attr_reader :persistence
 
+      # When calling the constructor, the module loads a config file, initializes
+      # the modules specified on the config, connects the bot to the Jabber server
+      # and starts listening for requests. This method will only return if the bot
+      # receives the order to shutdown.
       def initialize
         # Loads the config file
         @config = YAML::load(IO::read(File.dirname(__FILE__) + "/config/#{ENV_SET}.yml"))
@@ -64,18 +72,53 @@ module Computer
         }
       end
 
+      # Register a new command with computerbot. This method should receive
+      # a number of arguments, and a required callback that should be called
+      # everytime the registered command is triggered.
+      #
+      # syntax:: A text that describes the syntax of the command in a user friendly way
+      # description:: A text that resumes what the command does
+      # regex:: A Regex that is used to trigger this command
+      # namespace:: A (optional) String representing the namespace where this
+      #             module should be registered. A module should always use the
+      #             same namespace to register the different modules
+      # is_public:: if +true+, than the bot will try to trigger the command with the
+      #             messages from all buddies. Otherwise, it will only try to match
+      #             with the bot masters.
+      # callback:: The callback will be called when this command is triggered. It will
+      #            be called with two parameters: _sender_ and _message_. The module
+      #            can use the _message_ to extract more data from the command, and
+      #            then send back a message to the sender. As a bonus, everything that
+      #            you return from the callback will automaticly be sent to the sender.
+      #            You can prevent this beaviour by returning +nil+.
       def add_command(*args, &callback)
         @bot.add_command(*args, &callback)
       end
 
-      def deliver(sender, message)
+      # Delivers a message to a _recipient_.
+      #
+      # recipient:: An object representing a recipient
+      # message:: A String with the message to send, or an Array of
+      #           messages that will be sent in order.
+      def deliver(recipient, message)
         if message.is_a?(Array)
-          message.each { |message| @bot.deliver(sender, message)}
+          message.each { |message| @bot.deliver(recipient, message)}
         else
-          @bot.deliver(sender, message)
+          @bot.deliver(recipient, message)
         end
       end
   
+      # Register a periodic event on the event loop. This method returns
+      # an instance of PeriodicEvent that should be kept if the event should
+      # be cancelled in the future.
+      #
+      # interval:: the number of seconds that the event should be triggered
+      # block:: a block of code that is called everytime the event is triggered
+      def register_periodic_event(interval, &block)
+        PeriodicEvent.new(interval, &block)
+      end
+  
+      private
       def load_commands!
         @bot.add_command(
           :syntax      => 'ping',
@@ -102,11 +145,6 @@ module Computer
         exit
       end
 
-      def register_periodic_event(interval, &block)
-        PeriodicEvent.new(interval, &block)
-      end
-
-      private
       def configure_persistence(config)
         unless config['class']
           @logger.fatal "You need to specify a persistence class on your config"
@@ -149,7 +187,11 @@ module Computer
         end
       end
 
+      # A periodic event class. We use the EventMachine::PeriodicTimer
+      # to implement the interface to the event loop
       class PeriodicEvent < EventMachine::PeriodicTimer
+        # Initializes the periodic timer. It accepts a interval in seconds
+        # and a block of code that should be called when the event is fired.
         def initialize(interval, &block)
           super(interval)
 
@@ -162,6 +204,10 @@ module Computer
           end
         end
 
+        # Called by the event loop to fire this event. The code is run
+        # on a separate thread, and when if finishes, the event is rescheduled.
+        # So there is no need to worry about this event being fired while the
+        # previous one is still running.
         def fire
           EventMachine::defer(@operation, @callback)
         end
